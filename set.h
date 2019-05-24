@@ -1,3 +1,4 @@
+//new submit
 #include <memory>
 #include <iostream>
 #include <list>
@@ -13,8 +14,7 @@ public: typedef typename List::const_iterator iterator;
 private:
 	Node *parent;
 public:
-	virtual NodePtr find_place(const Element &key) = 0;
-	virtual const NodePtr find_place(const Element &key) const = 0;
+	virtual iterator find_place(const Element &key) const = 0;
 	virtual const iterator get_max() const = 0;
 	virtual std::pair<NodePtr, NodePtr> insert(iterator) = 0;
 	virtual std::pair<NodePtr, NodePtr> add_left(NodePtr) = 0;
@@ -35,14 +35,10 @@ public:
 	Leaf(iterator new_key)
 		: key(new_key)
 	{}
-	NodePtr find_place(const Element &) override/*{{{*/
-	{
-		return NodePtr (new Leaf<Element>(key));
-	}/*}}}*/
 
-	const NodePtr find_place(const Element &) const override/*{{{*/
+	iterator find_place(const Element &) const override/*{{{*/
 	{
-		return NodePtr (new Leaf<Element>(key));
+		return key;
 	}/*}}}*/
 
 	const iterator get_max() const override/*{{{*/
@@ -92,24 +88,15 @@ public:
 		, second_key(second_child->get_max())
 		, third_key(third_child->get_max())
 	{}
-	NodePtr find_place(const Element &cur_key) override/*{{{*/
-	{
-		if (not (*first_key < cur_key))
-			return first_child->find_place(cur_key);
-		else if (not (*second_key < cur_key))
-			return second_child->find_place(cur_key);
-		else
-			return third_child->find_place(cur_key);
-	}/*}}}*/
 
-	const NodePtr find_place(const Element &cur_key) const override/*{{{*/
+	iterator find_place(const Element &cur_key) const override/*{{{*/
 	{
-		if (not (*first_key < cur_key))
-			return first_child->find_place(cur_key);
-		else if (not (*second_key < cur_key))
+		if (*second_key < cur_key)
+			return third_child->find_place(cur_key);
+		else if (*first_key < cur_key)
 			return second_child->find_place(cur_key);
 		else
-			return third_child->find_place(cur_key);
+			return first_child->find_place(cur_key);
 	}/*}}}*/
 
 	const iterator get_max() const override/*{{{*/
@@ -142,20 +129,12 @@ public:
 		, first_key(first_child->get_max())
 		, second_key(second_child->get_max())
 	{}
-	NodePtr find_place(const Element &cur_key) override/*{{{*/
+	iterator find_place(const Element &cur_key) const override/*{{{*/
 	{
-		if (not (*first_key < cur_key))
-			return first_child->find_place(cur_key);
-		else
+		if (*first_key < cur_key)
 			return second_child->find_place(cur_key);
-	}/*}}}*/
-
-	const NodePtr find_place(const Element &cur_key) const override/*{{{*/
-	{
-		if (not (*first_key < cur_key))
-			return first_child->find_place(cur_key);
 		else
-			return second_child->find_place(cur_key);
+			return first_child->find_place(cur_key);
 	}/*}}}*/
 
 	const iterator get_max() const override/*{{{*/
@@ -393,7 +372,7 @@ public:
 		:Set(other.begin(), other.end())
 	{}/*}}}*/
 
-	Set<Element> operator =(const Set<Element> &other)/*{{{*/
+	Set<Element> &operator =(const Set<Element> &other)/*{{{*/
 	{
 		if (&other == this)
 			return *this;
@@ -414,15 +393,16 @@ public:
 	Set(Iter first, Iter last)
 		: elements()
 		, root(nullptr)
+		, my_size(0)
 	{
 		for (; first != last; first++)
 			insert(*first);
 	}/*}}}*/
 
-	template<typename Iter>/*{{{*/
-	Set(std::initializer_list<Element> list)
+	Set(std::initializer_list<Element> list)/*{{{*/
 		: elements()
 		, root(nullptr)
+		, my_size(0)
 	{
 		for (auto i: list)
 			insert(i);
@@ -432,9 +412,9 @@ public:
 	{
 		if (root == nullptr)
 			return elements.end();
-		const NodePtr cur = root->find_place(key);
-		if (*(cur->get_max()) == key)
-			return cur->get_max();
+		iterator cur = root->find_place(key);
+		if (not (*cur < key) and not (key < *cur))
+			return cur;
 		else
 			return elements.end();
 	}/*}}}*/
@@ -443,9 +423,9 @@ public:
 	{
 		if (root == nullptr)
 			return elements.end();
-		const NodePtr cur = root->find_place(key);
-		if (not (key < *(cur->get_max())))
-			return cur->get_max();
+		iterator cur = root->find_place(key);
+		if (not (*cur < key))
+			return cur;
 		else
 			return elements.end();
 	}/*}}}*/
@@ -454,8 +434,8 @@ public:
 	{
 		if (root != nullptr)
 		{
-			auto it = root->find_place(key)->get_max();
-			if (it != elements.end() and *it == key)
+			iterator it = root->find_place(key);
+			if (it != elements.end() and not (*it < key) and not (key < *it))
 				return;
 			if (it != elements.end() and *it < key)
 			{
@@ -470,14 +450,14 @@ public:
 			}
 			else
 			{
-				root = NodePtr (new Double<Element>(std::move(x.first), std::move(x.second)));
+				root = NodePtr(new Double<Element>(std::move(x.first), std::move(x.second)));
 			}
 		}
 		else
 		{
 			elements.push_back(key);
 			++my_size;
-			root = NodePtr (new Leaf<Element>(elements.begin()));
+			root = NodePtr(new Leaf<Element>(elements.begin()));
 		}
 	}/*}}}*/
 
@@ -485,7 +465,7 @@ public:
 	{
 		if (root != nullptr)
 		{
-			auto it = root->find_place(key)->get_max();
+			iterator it = find(key);
 			if (it == elements.end())
 				return;
 			root = std::move(root->erase(it).first);
